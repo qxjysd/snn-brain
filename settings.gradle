@@ -1,0 +1,3 @@
+rootProject.name = 'brainx-java'
+include ':brainx-core'
+include ':brainx-android'
