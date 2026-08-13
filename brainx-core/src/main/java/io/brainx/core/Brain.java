@@ -86,6 +86,8 @@ public class Brain {
     private final ThalamicRelay visualRelay, auditoryRelay;
     /** 跨模态记忆: 视觉↔听觉原型绑定 (多模态学习与输出) */
     private final CrossModalMemory crossModalMemory;
+    /** 时序预测器: 感官前向模型 (预测下一帧 + 延迟脑补) */
+    private final FeaturePredictor visualPredictor, auditoryPredictor;
 
     // 类脑频率波: 信号=频率振荡 + 记忆=频率共振 (整体联动)
     private final FrequencyWave neuralWave;      // 神经元频率波驱动
@@ -178,6 +180,9 @@ public class Brain {
         this.auditoryRelay = new ThalamicRelay(); // 脑干+丘脑中继 (听觉)
         // 跨模态记忆: 视觉原型 ↔ 听觉原型绑定 (多模态学习)
         this.crossModalMemory = new CrossModalMemory(vocabulary.length, visualSize, auditorySize);
+        // 时序预测器: 感官前向模型 (人脑预测脑补 — 平滑追踪/小脑前向模型延迟补偿)
+        this.visualPredictor = new FeaturePredictor(visualSize);
+        this.auditoryPredictor = new FeaturePredictor(auditorySize);
 
         // 类脑频率波初始化: 神经元频率波 + 记忆频率共振层
         this.neuralWave = FrequencyWave.neuralRange();
@@ -705,6 +710,52 @@ public class Brain {
 
     /** 跨模态记忆 (视觉↔听觉原型绑定) */
     public CrossModalMemory crossModalMemory() { return crossModalMemory; }
+
+    // ============ 时序预测与延迟脑补 (v5.4, 人脑预测能力) ============
+
+    /** 视觉时序预测: 看到真实帧 → 预测下一帧 (大脑持续预测感官) */
+    public double[] predictNextVisual(double[] visualFeatures) {
+        return visualPredictor.predictNext(visualFeatures);
+    }
+
+    /** 听觉时序预测 */
+    public double[] predictNextAuditory(double[] audioFeatures) {
+        return auditoryPredictor.predictNext(audioFeatures);
+    }
+
+    /**
+     * 延迟补偿感知 (脑补): 感官帧延迟时用预测填补当前感知。
+     * 人脑机制: 视觉/感觉信号有 ~100ms 传输延迟, 平滑追踪/小脑前向模型
+     * 用预测填补延迟期, 大脑"感知"的是预测的当前, 而非滞后的原始信号。
+     * @param rawFeatures 到达的感官帧 (可能滞后)
+     * @param delaySteps 延迟帧数 (0=正常帧: 更新预测器; >0=脑补该帧数的预测)
+     * @return 感知特征 (脑补帧或真实帧)
+     */
+    public double[] perceiveVisualWithDelayCompensation(double[] rawFeatures, int delaySteps) {
+        if (delaySteps > 0) return visualPredictor.extrapolate(delaySteps);   // 脑补: 预测当前
+        return visualPredictor.predictNext(rawFeatures);     // 正常: 更新 + 预测
+    }
+
+    public double[] perceiveAuditoryWithDelayCompensation(double[] audioFeatures, int delaySteps) {
+        if (delaySteps > 0) return auditoryPredictor.extrapolate(delaySteps);
+        return auditoryPredictor.predictNext(audioFeatures);
+    }
+
+    /** 预测置信度 (0-1): 速度小 → 预测可靠; 供脑补决策 */
+    public double visualPredictionConfidence() { return visualPredictor.confidence(); }
+    public double auditoryPredictionConfidence() { return auditoryPredictor.confidence(); }
+
+    /** 镜头/场景切换时重置预测器 (预测历史失效) */
+    public void resetPredictors() {
+        visualPredictor.reset();
+        auditoryPredictor.reset();
+    }
+
+    /** 预测能力摘要 (APK 显示) */
+    public String predictionSummary() {
+        return String.format("🔮 预测: 视觉置信%.0f%% | 听觉置信%.0f%% (延迟脑补)",
+                visualPredictor.confidence() * 100, auditoryPredictor.confidence() * 100);
+    }
 
     /**
      * 多模态学习: 视觉+听觉特征同时绑定到同一词 (概念 = 多模态绑定)。
