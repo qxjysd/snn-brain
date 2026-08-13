@@ -119,7 +119,7 @@ public class CompletenessAuditTest {
         assertTrue(brain.visualBridge().topDownGain() >= 1.0);
         // 识别仍正常 (全部联动不破坏功能)
         String[] r = brain.recognizeVisualWithConfidence(img);
-        assertEquals("你好", r[0], "识别应正常工作");
+        assertEquals(brain.vocabulary(0), r[0], "识别应正常工作");
     }
 
     /** 桥接器独立测试 */

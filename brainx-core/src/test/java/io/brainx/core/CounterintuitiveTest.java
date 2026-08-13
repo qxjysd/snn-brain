@@ -72,7 +72,7 @@ public class CounterintuitiveTest {
         for (int e = 0; e < 5; e++) brain.learnVisualWord(imgA, 0);
         // 识别时频率共振参与 → 识别结果是"解释" (带先验)
         String[] r = brain.recognizeVisualWithConfidence(imgA);
-        assertEquals("你好", r[0], "识别应命中已学词");
+        assertEquals(brain.vocabulary(0), r[0], "识别应命中已学概念");
         // 预测引擎已建立先验
         assertTrue(brain.predictiveEngine().priorCount() > 0, "先验应建立");
     }

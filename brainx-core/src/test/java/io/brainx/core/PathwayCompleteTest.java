@@ -95,7 +95,7 @@ public class PathwayCompleteTest {
         for (int e = 0; e < 5; e++) brain.learnVisualWord(img, 0);
         // 识别 (联想激活→中枢→爆发→意识)
         String[] r = brain.recognizeVisualWithConfidence(img);
-        assertTrue(r[0].equals("你好") || r[0].equals("苹果"), "识别应工作");
+        assertTrue(r[0].equals(brain.vocabulary(0)) || r[0].equals(brain.vocabulary(1)), "识别应工作");
         // 中枢已整合联想脉冲
         assertTrue(brain.centralHub().inputDim() > 0);
         // 多轮联动后联想增益 ≥1 (中枢反馈)

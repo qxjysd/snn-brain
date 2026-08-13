@@ -89,13 +89,13 @@ public class LanguageLearnerTest {
         // 学词 → 同步语音模板
         brain.learnVisualWord(img, 0);
         assertTrue(brain.languageLearner().voiceCount() >= 1, "学词应建语音模板");
-        // 听到语音 (模仿素材)
-        brain.hearSpokenWord(img, "苹果");
+        // 听到语音 (模仿素材) — 大脑用自主概念名
+        brain.hearSpokenWord(img, brain.vocabulary(0));
         assertTrue(brain.languageLearner().heardCount() >= 1);
         // 早期: 模仿或简单回应 (语音关联概念)
         String early = brain.speakAutonomously();
-        assertTrue(early.contains("苹果") || early.contains("你好"),
-                "早期应模仿或回应已学词, got=" + early);
+        assertTrue(early.contains(brain.vocabulary(0)) || early.contains(brain.vocabulary(1)),
+                "早期应模仿或回应已学概念, got=" + early);
         // 摘要可读
         assertTrue(brain.languageSummary().contains("语音"));
     }

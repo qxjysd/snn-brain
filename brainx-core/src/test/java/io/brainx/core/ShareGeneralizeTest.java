@@ -63,7 +63,7 @@ public class ShareGeneralizeTest {
                 bases[c][i] = ((i / (VisualNeuralEncoder.OUTPUT_DIM / 8)) == c) ? 0.9 : 0.1;
             }
         }
-        String[] vocab = {"你好", "苹果", "猫"};
+        String[] vocab = {"概念#1", "概念#2", "概念#3"};
         // 变体训练 (每类 8 个变体, 噪声 0.15)
         gt.trainWithVariants(brain, bases, labels, 0.15, 8);
         // 未见变体测试 (噪声 0.2, 比训练更高 = 更强泛化挑战)
@@ -81,7 +81,7 @@ public class ShareGeneralizeTest {
                 bases[c][i] = ((i / (VisualNeuralEncoder.OUTPUT_DIM / 4)) == c) ? 0.9 : 0.1;
             }
         }
-        String[] vocab = {"你好", "苹果"};
+        String[] vocab = {"概念#1", "概念#2"};
         double[] compare = gt.compareGeneralization(bases, labels, vocab, 10);
         // 高维下原型学习泛化饱和: 两种训练都应泛化良好 (变体训练不降低泛化)
         assertTrue(compare[0] > 0.5, "单样本训练应泛化: base=" + compare[0]);
@@ -133,7 +133,7 @@ public class ShareGeneralizeTest {
         assertEquals(15, info.points);
         // 恢复后识别仍工作
         String guess = brain2.recognizeVisual(img);
-        assertTrue(guess.equals("你好") || guess.equals("苹果"), "恢复后应能识别, got=" + guess);
+        assertTrue(guess.equals(brain.vocabulary(0)) || guess.equals(brain.vocabulary(1)), "恢复后应能识别, got=" + guess);
     }
 
     @Test

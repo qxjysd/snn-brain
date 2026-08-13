@@ -137,7 +137,8 @@ public class FrequencyWaveTest {
         assertTrue(freq.contains("脑电"), freq);
         // 识别仍工作 (频率共振参与)
         String[] r = brain.recognizeVisualWithConfidence(imgA);
-        assertTrue(r[0].equals("你好") || r[0].equals("苹果"), "频率联动后识别应工作, got=" + r[0]);
+        assertTrue(r[0].equals(brain.vocabulary(0)) || r[0].equals(brain.vocabulary(1)),
+                "频率联动后识别应工作, got=" + r[0]);
     }
 
     @Test

@@ -219,8 +219,8 @@ public class AlgorithmTest {
         // 识别
         String r1 = brain.recognizeVisual(imgA);
         String r2 = brain.recognizeVisual(imgB);
-        assertTrue(r1.equals("你好") || r1.equals("苹果"), "识别A=" + r1);
-        assertTrue(r2.equals("你好") || r2.equals("苹果"), "识别B=" + r2);
+        assertTrue(r1.equals(brain.vocabulary(0)) || r1.equals(brain.vocabulary(1)), "识别A=" + r1);
+        assertTrue(r2.equals(brain.vocabulary(0)) || r2.equals(brain.vocabulary(1)), "识别B=" + r2);
         assertTrue(brain.learnedWords().size() >= 2, "应学到至少2个词");
     }
 }

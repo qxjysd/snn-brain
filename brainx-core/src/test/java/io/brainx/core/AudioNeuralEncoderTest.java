@@ -68,6 +68,6 @@ public class AudioNeuralEncoderTest {
             brain.learnAuditoryWord(n2, 1);
         }
         String r = brain.recognizeAuditory(n1);
-        assertTrue(r.equals("你好") || r.equals("苹果"), "听觉神经信号识别应工作, got=" + r);
+        assertTrue(r.equals(brain.vocabulary(0)) || r.equals(brain.vocabulary(1)), "听觉神经信号识别应工作, got=" + r);
     }
 }

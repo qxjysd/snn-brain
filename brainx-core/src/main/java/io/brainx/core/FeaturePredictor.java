@@ -19,6 +19,7 @@ public class FeaturePredictor {
     private final int dim;
     private double[] prev;          // x_{t-1}
     private double[] velocity;      // 平滑速度 (EMA)
+    private double[] lastPrediction; // 上次预测帧 (预测验证用)
     private boolean initialized = false;
 
     /** 速度平滑系数 (0-1: 大=跟随快/噪声敏感, 小=平滑/滞后) */
@@ -29,8 +30,7 @@ public class FeaturePredictor {
         this.velocity = new double[dim];
     }
 
-    /**
-     * 更新历史并预测下一帧 (正常感知路径: 看到真实帧 → 大脑预测下一步)。
+    /** 更新历史并预测下一帧 (正常感知路径: 看到真实帧 → 大脑预测下一步)。
      * @return 预测的下一帧特征 (0-1)
      */
     public double[] predictNext(double[] current) {
@@ -40,7 +40,9 @@ public class FeaturePredictor {
         if (!initialized) {
             prev = current.clone();
             initialized = true;
+            lastPrediction = pred.clone();
             System.arraycopy(current, 0, pred, 0, n);
+            System.arraycopy(current, 0, lastPrediction, 0, n);
             return pred;
         }
         for (int i = 0; i < n; i++) {
@@ -49,7 +51,13 @@ public class FeaturePredictor {
             pred[i] = clamp01(current[i] + velocity[i]);     // 运动外推
         }
         prev = current.clone();
+        lastPrediction = pred.clone();
         return pred;
+    }
+
+    /** 上次预测的帧 (预测验证: 真实帧到达时对比) */
+    public double[] lastPrediction() {
+        return lastPrediction == null ? null : lastPrediction.clone();
     }
 
     /**
@@ -85,6 +93,7 @@ public class FeaturePredictor {
     public void reset() {
         initialized = false;
         prev = null;
+        lastPrediction = null;
         java.util.Arrays.fill(velocity, 0);
     }
 

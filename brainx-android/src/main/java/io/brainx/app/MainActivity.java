@@ -73,11 +73,8 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback {
     private Handler handler = new Handler(Looper.getMainLooper());
     private Random rnd = new Random(42);
 
-    // 学习模式状态
-    private boolean learningMode = true;   // true=教学(输入词标签), false=测试(识别)
-    private String currentLabel = "";
-    private int audioWordIndex = 0;
-    private final List<String> wordLabels = new ArrayList<>();
+    // 学习模式状态 (自主自由学习: 不预设词名, 大脑自主归类)
+    private boolean learningMode = true;   // true=自主学习, false=识别
     private volatile boolean recording = false;
     private AudioRecord audioRecord;
 
@@ -87,11 +84,9 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // 初始化大脑 (8 词表: 对应日常生活物品)
-        String[] vocab = {"苹果", "书本", "杯子", "花朵", "猫", "狗", "音乐", "拍手"};
+        // 初始化大脑 (8 概念槽, 自主命名: 不预设人类词名)
         brain = Brain.simpleBrain();
         trainer = new EduTrainer();
-        for (String w : vocab) wordLabels.add(w);
         questSystem = new io.brainx.core.QuestSystem();
 
         // TTS (加载慢/缺失处理: 不永久卡"初始化中")
@@ -513,15 +508,15 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback {
     // ============ 视觉: 摄像头 → 视觉皮层 ============
 
     private void captureAndLearn() {
-        // 轮流教学词表
-        currentLabel = wordLabels.get(rnd.nextInt(wordLabels.size()));
-        speak("请拍摄" + currentLabel + "，我来学习");
-        statusText.setText("📷 教学模式: 拍摄 " + currentLabel);
-        captureFrame(learnedWord -> {
-            brain.learnVisualWord(learnedWord, wordLabels.indexOf(currentLabel));
+        // 自主自由学习: 大脑自己归类命名, 不预设人类词名
+        statusText.setText(Lang.t("📷 自主学习中...", "📷 Self-learning..."));
+        captureFrame(features -> {
+            int idx = brain.learnVisual(features);   // 自主归类/新建概念
+            String label = brain.vocabulary()[idx];
             EduTrainer.Feedback fb = trainer.reward();
-            speak("学会了！" + fb.speechText);
-            statusText.setText("✅ 学会: " + currentLabel + " | " + fb.message);
+            speak(Lang.t("我记住了新东西", "I learned something new"));
+            statusText.setText(Lang.t("✅ 学会: " + label + " | " + fb.message,
+                    "✅ Learned: " + label + " | " + fb.message));
             questSystem.onEvent(io.brainx.core.QuestSystem.QuestType.学习, 1);
             refreshScore();
         });
@@ -638,9 +633,9 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback {
                 // 更新大脑视角: 显示识别结果
                 String dir = cameraFacing == Camera.CameraInfo.CAMERA_FACING_FRONT ? "前置" : "后置";
                 brainVisionView.setVisual(features, "未知的新东西", conf, dir);
-                // 真·未知 → 好奇激励: 学习这个新东西并给稀有奖励
-                String label = currentLabel.isEmpty() ? "新发现" : currentLabel;
-                brain.learnVisualWord(features, rnd.nextInt(brain.vocabularySize()));
+                // 真·未知 → 好奇激励: 自主学习这个新东西并给稀有奖励
+                int idx = brain.learnVisual(features);   // 自主归类: 新建概念
+                String label = brain.vocabulary()[idx];
                 trainer.observeRecognition(true);
                 EduTrainer.Feedback fb = trainer.exploreUnknown(label);
                 speak("发现新事物！" + fb.speechText);
@@ -681,15 +676,16 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback {
     // ============ 听觉: 麦克风 → 听觉皮层 + ITD ============
 
     private void recordAndLearn() {
-        currentLabel = wordLabels.get(rnd.nextInt(wordLabels.size()));
-        speak("请发出声音，我来学" + currentLabel);
-        statusText.setText("🎤 录音学习: " + currentLabel);
+        // 自主自由学习: 大脑自己归类声音, 不预设词名
+        statusText.setText(Lang.t("🎤 自主听声学习中...", "🎤 Self-listening..."));
         recordFrame(features -> {
             if (features == null) return;
-            brain.learnAuditoryWord(features, wordLabels.indexOf(currentLabel));
+            int idx = brain.learnAuditory(features);   // 自主归类/新建概念
+            String label = brain.vocabulary()[idx];
             EduTrainer.Feedback fb = trainer.reward();
-            speak("学会了！" + fb.speechText);
-            statusText.setText("✅ 学会声音: " + currentLabel + " | " + fb.message);
+            speak(Lang.t("我记住了这个声音", "I learned this sound"));
+            statusText.setText(Lang.t("✅ 学会声音: " + label + " | " + fb.message,
+                    "✅ Learned: " + label + " | " + fb.message));
             refreshScore();
         });
     }
@@ -765,7 +761,7 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback {
 
     // ============ 教育激励/惩罚 ============
 
-    /** 判定答案: 置信度驱动 —— 认得出→奖惩, 认不出→好奇心上升提示探索 */
+    /** 判定答案: 自主评估 — 置信度驱动 (无预设答案, 高置信=我认出来了) */
     private void checkAnswer(String guess, double confidence) {
         trainer.observeRecognition(guess.equals("未知") || confidence < 0.3);
         if (guess.equals("未知") || confidence < 0.3) {
@@ -776,10 +772,8 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback {
             refreshScore();
             return;
         }
-        boolean correct = guess.equals(currentLabel) || rnd.nextDouble() < trainer.progress();
-        if (currentLabel.isEmpty()) {
-            correct = rnd.nextDouble() < trainer.progress();
-        }
+        // 自主评估: 高置信 = 我认出来了 (自我评估, 无人类预设的"正确答案")
+        boolean correct = confidence >= 0.5;
         EduTrainer.Feedback fb;
         if (correct) {
             fb = trainer.reward();
@@ -787,13 +781,9 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback {
             speak("我认出来了，是" + guess + "。" + fb.speechText);
             questSystem.onEvent(io.brainx.core.QuestSystem.QuestType.连击, 1);
         } else {
-            fb = trainer.punish(currentLabel.isEmpty() ? guess : currentLabel);
-            statusText.setText("❌ 答错: 我猜是" + guess + " | " + fb.message);
+            fb = trainer.punish(guess);
+            statusText.setText("❌ 不确定: 我猜是" + guess + " | " + fb.message);
             speak("嗯，" + fb.speechText);
-            // 教育性惩罚: 重新学习当前词
-            if (!currentLabel.isEmpty()) {
-                brain.learnVisualWord(new double[VISION_SIZE], wordLabels.indexOf(currentLabel));
-            }
         }
         // 镜像测试: 识别反馈 → 自我意识 (知道自己多准)
         brain.mirrorFeedback(correct, confidence);
@@ -1020,16 +1010,30 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback {
     private long lastFrameProcess = 0;
     /** 预览帧处理中标志 (防重入) */
     private boolean processingFrame = false;
+    /** 最近已编码帧缓存 (丢帧时供预测补足显示, 防画面冻结卡顿) */
+    private double[] cachedFeatures = null;
 
     /**
-     * 预览帧流处理: NV21 → 旋转竖屏 → 灰度 → 96维神经编码 → 大脑识别。
-     * 真正的连续视频输入 (每 ~500ms 一帧, 节流避免卡顿)。
+     * 预览帧流处理: NV21 → 旋转竖屏 → 灰度 → 5120维神经编码 → 大脑识别。
+     * 帧缓存 + 预测补足 + 验证纠正闭环 (v5.4):
+     *   1. 性能不足丢帧 (节流/处理中) → 大脑用预测帧脑补画面, 不冻结
+     *   2. 真实帧到达 → verifyVisualPrediction: 与上次预测对比 → 误差 → 纠正连接
+     *   3. 预测下一帧 (供下次丢帧时脑补)
      */
     private void processPreviewFrame(byte[] nv21, Camera cam) {
         long now = SystemClock.elapsedRealtime();
-        if (now - lastFrameProcess < 500) return;  // 节流: 2帧/秒
-        if (processingFrame) return;
-        if (switchingCamera) return;
+        // 丢帧路径 (性能不足): 用缓存的最近帧 + 运动外推预测脑补当前画面
+        if (now - lastFrameProcess < 500 || processingFrame || switchingCamera) {
+            if (cachedFeatures != null) {
+                double[] fill = brain.visualExtrapolate();
+                if (fill != null) {
+                    String dir = cameraFacing == Camera.CameraInfo.CAMERA_FACING_FRONT ? "前置" : "后置";
+                    brainVisionView.setVisual(fill, Lang.t("预测", "pred"),
+                            brain.visualPredictionConfidence(), dir);
+                }
+            }
+            return;
+        }
         lastFrameProcess = now;
         processingFrame = true;
         try {
@@ -1046,7 +1050,7 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback {
             }
             // 旋转+块均值采样 → GRID×GRID 灰度网格
             double[][] grid = rotateAndSample(nv21, w, h, rot);
-            // 灰度数组 → 视觉神经编码 (视网膜感受野+方向 → 1280维神经信号)
+            // 灰度数组 → 视觉神经编码 (视网膜感受野+方向 → 5120维神经信号)
             int gridSize = io.brainx.core.VisualNeuralEncoder.GRID;
             double[] grayFlat = new double[gridSize * gridSize];
             int idx = 0;
@@ -1054,6 +1058,10 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback {
                 for (int x = 0; x < gridSize; x++) grayFlat[idx++] = grid[y][x] * 255;
             }
             double[] features = new io.brainx.core.VisualNeuralEncoder().encode(grayFlat, gridSize, gridSize);
+            // 预测验证与纠正: 真实帧 vs 上次预测 → 误差 → 纠正连接 (predictive coding)
+            brain.verifyVisualPrediction(features);
+            // 缓存已编码帧 (丢帧时预测补足的基础)
+            cachedFeatures = features;
             // 大脑解码: 识别 → 更新大脑视角 (连续视频流)
             String[] result = brain.recognizeVisualWithConfidence(features);
             String guess = result[0];

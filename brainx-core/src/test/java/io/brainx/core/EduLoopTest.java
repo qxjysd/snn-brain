@@ -36,7 +36,7 @@ public class EduLoopTest {
     @Test
     void brainLearnsWordsThenRecognizes() {
         // 完整闭环: 学 4 个词 → 全部识别对 (用 simpleBrain 词表前4: 你好/苹果/猫/狗)
-        String[] vocab = {"你好", "苹果", "猫", "狗"};
+        String[] vocab = {"概念#1", "概念#2", "概念#3", "概念#4"};
         Brain brain = Brain.simpleBrain();
         double[][] patterns = new double[4][VisualNeuralEncoder.OUTPUT_DIM];
         for (int w = 0; w < 4; w++) {

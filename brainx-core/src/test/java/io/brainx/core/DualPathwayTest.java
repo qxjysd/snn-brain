@@ -84,7 +84,7 @@ public class DualPathwayTest {
         double[] what = paths[0];
         for (int e = 0; e < 3; e++) brain.learnVisualWord(what, 0);
         String r = brain.recognizeVisual(what);
-        assertTrue(r.equals("你好") || r.equals("苹果"), "腹侧识别应工作, got=" + r);
+        assertTrue(r.equals(brain.vocabulary(0)) || r.equals(brain.vocabulary(1)), "腹侧识别应工作, got=" + r);
     }
 
     @Test

@@ -76,8 +76,8 @@ public class BrainNoiseTest {
         }
         String r1 = brain.recognizeVisual(imgA);
         String r2 = brain.recognizeVisual(imgB);
-        assertTrue(r1.equals("你好") || r1.equals("苹果"), "噪声下应仍能识别A, got=" + r1);
-        assertTrue(r2.equals("你好") || r2.equals("苹果"), "噪声下应仍能识别B, got=" + r2);
+        assertTrue(r1.equals(brain.vocabulary(0)) || r1.equals(brain.vocabulary(1)), "噪声下应仍能识别A, got=" + r1);
+        assertTrue(r2.equals(brain.vocabulary(0)) || r2.equals(brain.vocabulary(1)), "噪声下应仍能识别B, got=" + r2);
     }
 
     @Test

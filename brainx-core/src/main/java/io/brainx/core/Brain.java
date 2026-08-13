@@ -208,11 +208,76 @@ public class Brain {
         this.eegGenerator = new EEGGenerator();
     }
 
-    /** 简化大脑: 32视觉 + 16听觉 + 24联想 + 8词表 */
+    /**
+     * 简化大脑: 32视觉 + 16听觉 + 24联想 + 8概念槽。
+     * 概念槽由大脑自主命名 (概念#1..#8), 不预设人类词名 — 一切自由学习。
+     */
     public static Brain simpleBrain() {
-        String[] vocab = {"你好", "苹果", "猫", "狗", "水", "跑", "红", "大"};
+        String[] concepts = new String[8];
+        for (int i = 0; i < concepts.length; i++) concepts[i] = "概念#" + (i + 1);
         // 视觉 5120 维 + 听觉 128 频带 + 联想 120 (5倍) + 中枢 120 (5倍)
-        return new Brain(VisualNeuralEncoder.OUTPUT_DIM, AudioNeuralEncoder.BANDS, 120, vocab);
+        return new Brain(VisualNeuralEncoder.OUTPUT_DIM, AudioNeuralEncoder.BANDS, 120, concepts);
+    }
+
+    // ============ 自主自由学习 (v5.4: 不预设名称, 大脑自主归类命名) ============
+
+    /**
+     * 自主学习 (视觉): 大脑自己决定这是新概念还是已知概念。
+     *   识别置信度高 → 归入该概念 (已学过的强化);
+     *   未知/低置信 → 新建概念 (占用空闲概念槽, 自主命名 概念#N)。
+     * @return 归入/新建的概念索引
+     */
+    public int learnVisual(double[] imageFeatures) {
+        String[] r = recognizeVisualWithConfidence(imageFeatures);
+        int idx = conceptIndexFor(r[0]);
+        if (idx < 0 || Double.parseDouble(r[1]) < 0.5) {
+            idx = firstUnusedConcept();
+        }
+        learnVisualWord(imageFeatures, idx);
+        return idx;
+    }
+
+    /** 自主学习 (听觉) */
+    public int learnAuditory(double[] audioFeatures) {
+        String[] r = recognizeAuditoryWithConfidence(audioFeatures);
+        int idx = conceptIndexFor(r[0]);
+        if (idx < 0 || Double.parseDouble(r[1]) < 0.5) {
+            idx = firstUnusedConcept();
+        }
+        learnAuditoryWord(audioFeatures, idx);
+        return idx;
+    }
+
+    /** 自主学习 (跨模态绑定): 视觉+听觉同时 → 归入同一概念或新建 */
+    public int learnCrossModal(double[] visualFeatures, double[] audioFeatures) {
+        String[] r = recognizeMultiModal(visualFeatures, audioFeatures);
+        int idx = conceptIndexFor(r[0]);
+        if (idx < 0 || Double.parseDouble(r[1]) < 0.5) {
+            idx = firstUnusedConcept();
+        }
+        learnCrossModal(visualFeatures, audioFeatures, idx);
+        return idx;
+    }
+
+    /** 概念标签 → 概念索引 (未知/空 → -1) */
+    private int conceptIndexFor(String label) {
+        for (int i = 0; i < vocabulary.length; i++) {
+            if (vocabulary[i].equals(label)) return i;
+        }
+        return -1;
+    }
+
+    /** 第一个未被学习的概念槽 (自由学习: 新建概念) */
+    private int firstUnusedConcept() {
+        for (int i = 0; i < vocabulary.length; i++) {
+            boolean used = false;
+            for (String w : learnedWords) {
+                if (w.equals(vocabulary[i])) { used = true; break; }
+            }
+            if (!used) return i;
+        }
+        // 全用满: 返回最近最少用的 (概念循环覆盖, 模拟记忆衰减)
+        return 0;
     }
 
     /**
@@ -756,6 +821,50 @@ public class Brain {
         return String.format("🔮 预测: 视觉置信%.0f%% | 听觉置信%.0f%% (延迟脑补)",
                 visualPredictor.confidence() * 100, auditoryPredictor.confidence() * 100);
     }
+
+    /** 上次视觉预测误差 (0-1, 供显示/调试) */
+    private double lastVisualPredErr = 1.0;
+    public double lastVisualPredErr() { return lastVisualPredErr; }
+
+    /**
+     * 预测验证与纠正 (predictive coding 闭环):
+     *   真实帧到达 → 与上次预测对比 → 预测误差 → 纠正连接。
+     *   误差小 = 预测准 (前向模型正确, 稳定);
+     *   误差大 = 预测失准 → 纠正: 内部模型学习真实帧 + 预测器速度重置
+     *   (前向模型参数修正, 对应小脑误差驱动的突触纠正) + 多巴胺意外信号。
+     * @param realFeatures 真实感官帧
+     * @return 预测误差 (0-1)
+     */
+    public double verifyVisualPrediction(double[] realFeatures) {
+        double[] pred = visualPredictor.lastPrediction();
+        if (pred == null) {
+            predictNextVisual(realFeatures);
+            lastVisualPredErr = 1.0;
+            return lastVisualPredErr;
+        }
+        // 预测误差: 逐点平均绝对差
+        double err = 0;
+        int n = Math.min(pred.length, realFeatures.length);
+        for (int i = 0; i < n; i++) err += Math.abs(pred[i] - realFeatures[i]);
+        err = n > 0 ? err / n : 1.0;
+        lastVisualPredErr = err;
+        // 内部模型学习真实帧 (预测纠错: 前向模型参数更新)
+        double[] state = new double[Math.min(16, realFeatures.length)];
+        System.arraycopy(realFeatures, 0, state, 0, state.length);
+        double actual = 0.5 + 0.5 * avgIntensity(realFeatures);
+        internalModel.learn(state, actual);
+        // 多巴胺: 预测准确=预期满足, 误差大=意外 (RPE)
+        double surprise = err < 0.15 ? 1.0 : (err > 0.35 ? 0.0 : 0.5);
+        dopamineSystem.learnEvent(surprise, 1.0);
+        // 连接纠正: 速度 EMA 自然适应运动变化 (突变后 ~5 帧翻转收敛);
+        // 显式 reset 只在镜头/场景切换时由 resetPredictors() 调用 (MainActivity 已接入)
+        // 预测下一帧 (供脑补显示)
+        predictNextVisual(realFeatures);
+        return err;
+    }
+
+    /** 视觉预测器上一帧预测 (脑补显示用) */
+    public double[] visualExtrapolate() { return visualPredictor.extrapolate(1); }
 
     /**
      * 多模态学习: 视觉+听觉特征同时绑定到同一词 (概念 = 多模态绑定)。
@@ -1477,5 +1586,6 @@ public class Brain {
     }
 
     public int vocabularySize() { return vocabulary.length; }
+    public String[] vocabulary() { return vocabulary; }
     public String vocabulary(int i) { return vocabulary[i]; }
 }

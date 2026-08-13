@@ -37,7 +37,7 @@ public class CrossModalTest {
             assertTrue(brain.crossModalMemory().isBound(c), "词" + c + "应已绑定");
         }
         // 双模态各自识别正确 (概念共享)
-        String[] vocab = {"你好", "苹果", "猫", "狗"};
+        String[] vocab = {"概念#1", "概念#2", "概念#3", "概念#4"};
         int hitV = 0, hitA = 0;
         for (int c = 0; c < 4; c++) {
             if (brain.recognizeVisual(visPat(c, V)).equals(vocab[c])) hitV++;
@@ -56,7 +56,7 @@ public class CrossModalTest {
         }
         // 一致输入: 视觉猫 + 听觉猫 → 融合置信度 ≥ 单模态
         String[] fused = brain.recognizeMultiModal(visPat(1, V), audPat(1, B));
-        assertEquals("苹果", fused[0], "一致输入应融合到共同词");
+        assertEquals(brain.vocabulary(1), fused[0], "一致输入应融合到共同概念");
         double fusedConf = Double.parseDouble(fused[1]);
         double singleConf = Double.parseDouble(brain.recognizeVisualWithConfidence(visPat(1, V))[1]);
         assertTrue(fusedConf >= singleConf - 0.05,

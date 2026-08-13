@@ -160,7 +160,8 @@ public class MemoryConsciousnessTest {
         assertTrue(summary.contains("工作记忆"), summary);
         // 识别仍工作
         String[] r = brain.recognizeVisualWithConfidence(imgA);
-        assertTrue(r[0].equals("你好") || r[0].equals("苹果"), "识别应工作, got=" + r[0]);
+        assertTrue(r[0].equals(brain.vocabulary(0)) || r[0].equals(brain.vocabulary(1)),
+                "识别应工作, got=" + r[0]);
     }
 
     @Test

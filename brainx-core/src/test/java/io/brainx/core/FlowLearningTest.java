@@ -42,7 +42,7 @@ public class FlowLearningTest {
         int V = VisualNeuralEncoder.OUTPUT_DIM;
         for (int e = 0; e < 30; e++)
             for (int c = 0; c < 4; c++) brain.learnVisualWord(pat(c, V), c);
-        String[] vocab = {"你好", "苹果", "猫", "狗"};
+        String[] vocab = {"概念#1", "概念#2", "概念#3", "概念#4"};
         int hit = 0;
         for (int c = 0; c < 4; c++) {
             if (brain.recognizeVisual(pat(c, V)).equals(vocab[c])) hit++;
@@ -91,7 +91,7 @@ public class FlowLearningTest {
         for (int i = 0; i < after.length; i++)
             for (int j = 0; j < after[i].length; j++) delta += Math.abs(after[i][j] - before[i][j]);
         assertTrue(delta > 0.1, "听觉 pp-prop 连接应随学习演化, Δ=" + delta);
-        assertEquals("苹果", brain.recognizeAuditory(aud), "听觉识别应指向学的词");
+        assertEquals(brain.vocabulary(1), brain.recognizeAuditory(aud), "听觉识别应指向学的概念");
     }
 
     private static double[][] clone2d(double[][] m) {

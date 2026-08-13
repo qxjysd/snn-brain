@@ -119,7 +119,7 @@ public class PowerManagerTest {
         double[] img = new double[VisualNeuralEncoder.OUTPUT_DIM];
         for (int i = 0; i < VisualNeuralEncoder.OUTPUT_DIM; i++) img[i] = 0.9;
         brain.learnVisualWord(img, 0);
-        assertEquals("你好", brain.recognizeVisual(img), "节能档学习仍应工作");
+        assertEquals(brain.vocabulary(0), brain.recognizeVisual(img), "节能档学习仍应工作");
         // 切超频
         pm.setLevel(PowerManager.Level.超频, 0);
         brain.applyPowerProfile(pm.profile());
