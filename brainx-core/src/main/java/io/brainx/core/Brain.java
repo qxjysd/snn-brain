@@ -3,6 +3,7 @@ package io.brainx.core;
 import io.brainx.core.encoding.Encoders;
 import io.brainx.core.encoding.TTFS;
 import io.brainx.core.learning.PPProp;
+import io.brainx.core.learning.EProp;
 import io.brainx.core.mass.JansenRit;
 import io.brainx.core.mass.WongWang;
 import io.brainx.core.neuron.LIF;
@@ -100,7 +101,12 @@ public class Brain {
     private final PulseModule[] hubModules;      // 注册到中枢的模块
     private final SensoryCortexBridge visualBridge, auditoryBridge;  // 感觉皮层桥接
     private final AssocBridge assocBridge;  // 联想皮层桥接 (全局工作空间节点)
-
+    // v5.5 论文引用新增机制: 星形胶质细胞 / 扩散近似 / 想象发声 / e-prop / 全脑网络
+    private final AstrocyteLayer astrocyteLayer;        // 三突触可塑性 (AGMP)
+    private final DiffusionApproximation diffusionApprox; // 脉冲→宏观率 (扩散近似)
+    private final ImaginedSpeech imaginedSpeech;         // 内心独白 (想象语音)
+    private final EProp epropAssoc;                      // e-prop 在线学习 (联想层)
+    private final WholeBrainNetwork wholeBrain;          // 全脑网络 (粗粒度镜像)
     // EEG 发生器 (脉冲聚合→脑电波→回馈调制, 书中"聚合的脑活动")
     private final EEGGenerator eegGenerator;
 
@@ -206,6 +212,17 @@ public class Brain {
         for (PulseModule m : hubModules) totalPulseDim += m.pulseDim();
         this.centralHub = CentralHub.defaultParams(totalPulseDim);
         this.eegGenerator = new EEGGenerator();
+        // v5.5 论文引用新增机制初始化
+        // 星形胶质细胞: 覆盖全部皮层神经元 (三突触可塑性, 慢速门控)
+        this.astrocyteLayer = new AstrocyteLayer(visualSize + auditorySize + assocSize);
+        // 扩散近似: 从脉冲统计解析宏观率/稳定性 (bioRxiv 2024.12)
+        this.diffusionApprox = DiffusionApproximation.defaultParams();
+        // 想象发声: 内心独白 (复用声带模板库, 代谢成本模型)
+        this.imaginedSpeech = new ImaginedSpeech(voiceLearner);
+        // e-prop 在线学习: 联想层 (资格迹+反馈对齐, 三因子规则)
+        this.epropAssoc = EProp.withDefaults(visualSize + auditorySize, assocSize, 0.001);
+        // 全脑网络: 8 区域粗粒度镜像 (NatComm 2025 结构→功能)
+        this.wholeBrain = WholeBrainNetwork.defaultParams();
     }
 
     /**
@@ -354,6 +371,38 @@ public class Brain {
         }
         visualToAssoc.update(learningSignal);
         visualToAssoc.applyGradients();
+        // v5.5 星形胶质细胞门控: 胶质慢速状态调制联想层权重更新 (AGMP 四因子,
+        // 持续活动神经元开放可塑, 低活动保护旧知识 — 防灾难性遗忘)
+        // firingState 长度 = 视觉+听觉+联想 = 胶质层神经元数 (5368), 直接全量传入
+        astrocyteLayer.step(null, null, firingState, 1.0);
+        // v5.5 e-prop 并行在线学习: 联想层第二路径 (资格迹+反馈对齐)
+        double[] epropIn = new double[visualCortexSize + auditoryCortexSize];
+        System.arraycopy(vRate, 0, epropIn, 0, visualCortexSize);
+        double[] epropOut = epropAssoc.forward(epropIn);
+        double[] epropErr = new double[associationCortexSize];
+        for (int i = 0; i < associationCortexSize; i++) {
+            epropErr[i] = Math.max(0, Math.tanh(assocActivation[i])) - epropOut[i];  // 局部误差
+        }
+        epropAssoc.setOutputError(epropErr);
+        epropAssoc.update();
+        epropAssoc.applyGradients();
+        // v5.5 全脑网络上报: 视觉学习 → 枕叶/颞叶/海马激活 (宏观镜像)
+        double[] wbStim = new double[WholeBrainNetwork.N];
+        wbStim[3] = 4.0;   // 枕叶 (视觉)
+        wbStim[2] = 2.0;   // 颞叶 (语义)
+        wbStim[4] = 2.0;   // 海马 (记忆)
+        wbStim[0] = 1.0;   // 前额叶 (注意)
+        for (int t = 0; t < 3; t++) wholeBrain.step(wbStim, 1.0);
+        // v5.5 扩散近似: 视觉皮层脉冲统计 → 宏观率/稳定性 (解析读出口)
+        double[] spikeCounts = new double[visualCortexSize];
+        for (int i = 0; i < visualCortexSize; i++) spikeCounts[i] = spikes[i];
+        diffusionApprox.estimate(spikeCounts);
+        // v5.5 想象发声: 高置信概念激活 → 内心独白 (不经过听觉输入)
+        double maxAct = 0;
+        for (double a : assocActivation) maxAct = Math.max(maxAct, Math.abs(a));
+        if (maxAct >= 0.5) {
+            imaginedSpeech.imagine(vocabulary[wordIndex], 0.6 + 0.3 * rnd.nextDouble(), System.currentTimeMillis());
+        }
         // 工作记忆: 将当前视觉模式写入工作记忆 (fWBM: 自持续活动保持)
         workingMemory.write(imageFeatures);
         // 意识: 视觉感知进入工作空间广播
@@ -545,6 +594,30 @@ public class Brain {
         double sum = 0;
         for (double f : features) sum += f;
         return sum / Math.max(1, features.length);
+    }
+
+    // ============ v5.5 论文引用新机制 getter (供 UI/测试/审计) ============
+
+    /** 星形胶质细胞层 (三突触可塑性) */
+    public AstrocyteLayer astrocyteLayer() { return astrocyteLayer; }
+
+    /** 扩散近似 (脉冲→宏观率) */
+    public DiffusionApproximation diffusionApprox() { return diffusionApprox; }
+
+    /** 想象发声 (内心独白) */
+    public ImaginedSpeech imaginedSpeech() { return imaginedSpeech; }
+
+    /** e-prop 在线学习 (联想层第二路径) */
+    public EProp epropAssoc() { return epropAssoc; }
+
+    /** 全脑网络 (粗粒度镜像) */
+    public WholeBrainNetwork wholeBrain() { return wholeBrain; }
+
+    /** v5.5 全脑机制摘要 (供显示层/状态栏) */
+    public String brain55Summary() {
+        return astrocyteLayer.summary() + " | " + diffusionApprox.interpret()
+                + " | " + wholeBrain.summary()
+                + (imaginedSpeech.hasInnerSpeech() ? " | " + imaginedSpeech.summary() : "");
     }
 
     private double[] visualFeatures(double[] imageFeatures) {
